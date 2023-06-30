@@ -1,0 +1,4 @@
+Device is lightning.gpu not default.qubit (CPU can also use lightning.qubit)
+GPU uses diff_method="adjoint" because parameter-shift time increases very fast as parameters increase, default.qubit uses backprop by default, but can also use adjoint
+
+That's it for now.
