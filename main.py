@@ -19,6 +19,9 @@ optim_iter = int(sys.argv[5])
 prune_after = int(sys.argv[6])
 lr = float(sys.argv[7])
 
+#Change to lightning.gpu if you want to use GPU
+simulator = "lightning.gpu"
+
 #DEFINING THE CIRCUIT
 
 def layer(x, params, wires, i0=0, inc=1):
@@ -38,10 +41,11 @@ def ansatz(x, params, wires):
         layer(x, layer_params, wires, i0=j * len(wires))
 
 #check if I need batch_obs
-dev = qml.device("default.qubit", wires=num_wires, shots=None)
+dev = qml.device(simulator, wires=num_wires, shots=None)
 wires = dev.wires.tolist()
 
-@qml.qnode(dev, interface="autograd") 
+#I use adjoint so it works for both default.qubit and lightning.gpu (backprop doesn't work for lightning.gpu)
+@qml.qnode(dev, interface="autograd", diff_method="adjoint") 
 def kernel_circuit(x1, x2, params):
     ansatz(x1, params, wires=wires)
     qml.adjoint(ansatz)(x2, params, wires=wires)
@@ -132,6 +136,7 @@ def trainSVM(x_train, x_test, y_train, y_test):
     alignments = []
     
     start = time.time()
+
     for i in range(optim_iter):
         # counter to track when to stop the optimization
         counter = 0
@@ -179,4 +184,3 @@ def trainSVM(x_train, x_test, y_train, y_test):
 print(f"Training dataset {name}")
 
 trainSVM(x_train, x_test, y_train, y_test)
-
