@@ -68,28 +68,23 @@ def random_params(num_wires, num_layers):
 
 def accuracy(classifier, X, Y_target):
     return 1 - np.count_nonzero(classifier.predict(X) - Y_target) / len(Y_target)
-
 #Prints a custom message in description
 #The alignment of the kernel
 #The accuracy of the classifier
-def printInfo(datasets, kernel):
-    start = time.time()
-    total_acc = 0
-    for dataset, name in datasets:
-        x_train, x_test, y_train, y_test = dataset
+def printInfo(description, datasets, classifiers, kernel):
+    print(description)
+    total_alignment = 0
+    total_accuracy = 0
+    for i, ((X, Y), name) in enumerate(datasets):
+        alignment = target_alignment(X, Y, kernel)
+        total_alignment += alignment
+        curr_accuracy = accuracy(classifiers[i], X, Y)
+        total_accuracy += curr_accuracy
+        print(f"Alignment for dataset {name}: {alignment:.4f}")
+        print(f"Accuracy: {curr_accuracy:.3f}")
 
-        alignment = target_alignment(x_test, y_test, kernel)
-        print(f"kernel alignment: {alignment:.3f}")
-
-        svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, kernel)).fit(x_train, y_train)
-
-        acc = accuracy(svm, x_test, y_test)
-        print(f"The accuracy for {name} is  {acc:.3f}")
-        total_acc += acc
-
-    print(f"The average accuracy for test datasets is {total_acc/len(datasets):.3f}")
-    print(f"Time taken for printInfo: {time.time()-start}")
-
+    print(f"Total alignment: {total_alignment/len(datasets):.4f}")
+    print(f"Total accuracy {total_accuracy/len(datasets):.3f}")
 
 def cosine_similarity(A, B):
     A = A.flatten()
@@ -117,7 +112,8 @@ def target_alignment(X, Y, kernel):
 #DATASET LOADING AND PROCESSING
 
 files = os.listdir(train_dir)
-datasets = []
+train_data = []
+test_data = []
 
 for file in files:
     file_path = os.path.join(train_dir, file)
@@ -132,69 +128,93 @@ for file in files:
     X = scaler.fit_transform(X)
 
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
-    
-    datasets.append(((x_train, x_test, y_train, y_test), file))
+    train_data.append(((x_train, y_train), file))
+    test_data.append(((x_test, y_test), file))
 
 #END OF DATASET LOADING AND PROCESSING
 
 
 #START OF MAIN FILE
 
-def trainSVM(datasets):
+def trainSVM(train_data, test_data):
     print(f"Wires: {num_wires} | Layers: {num_layers} | Batch_Size: {batch_size} | iterations: {optim_iter} | lr: {lr}")
 
     params = random_params(num_wires=num_wires, num_layers=num_layers)
-
     init_kernel = lambda x1, x2: kernel(x1, x2, params)
-    printInfo(datasets, init_kernel)
+    classifiers = []
+
+    start = time.time()
+    for (X, Y), _ in train_data:
+        classifiers.append(SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(X, Y))
+
+    printInfo("Before kernel alignment", test_data, classifiers, init_kernel)
+
+    end = time.time()
+    print(f"Training and accuracy testing time: {end-start:.3f}")
 
     # Kernel alignment
-
     opt = qml.GradientDescentOptimizer(lr)
     alignments = []
-    
+    max_alignment = -1
+    counter = 0
     start = time.time()
 
     for i in range(optim_iter):
         # counter to track when to stop the optimization
-        counter = 0
+        
         init_kernel = lambda x1, x2: kernel(x1, x2, params)
 
-        def cost(_datasets):
+        def cost(curr_params):
+            init_kernel = lambda x1, x2: kernel(x1, x2, curr_params)
             total_cost = 0
-            for dataset, _ in _datasets:
-                x_train, _, y_train, _ = dataset
-                subset = np.random.choice(list(range(len(x_train))), batch_size, requires_grad=False)
-                total_cost += -target_alignment(x_train[subset],y_train[subset], init_kernel)
-            return total_cost / len(_datasets)
+            for (X, Y), _ in train_data:
+                subset = np.random.choice(list(range(len(X))), batch_size, requires_grad=False)
+                total_cost += -target_alignment(X[subset], Y[subset], init_kernel)
+            return total_cost / len(train_data)
         
-        params, curr_cost = opt.step_and_cost(cost, datasets)
+        params = opt.step(cost, params)
 
-        if (i + 1) % 50 == 0:
+        if (i + 1) % 500 == 0:
+            init_kernel = lambda x1, x2: kernel(x1, x2, params)
             curr_alignment = 0
-            for x_train, _, y_train, _ in datasets:
-                subset = np.random.choice(list(range(len(x_train))), batch_size, requires_grad=False)
-                curr_alignment += -target_alignment(x_train[subset],y_train[subset], init_kernel)
-            curr_alignment /= len(datasets)
-
+            for (X, Y), _ in test_data:
+                curr_alignment += target_alignment(X, Y, init_kernel)
+            curr_alignment /= len(test_data)
+            
+            if curr_alignment > max_alignment:
+                max_alignment = curr_alignment
+                counter = 0
+            else:
+                counter += 1 
             alignments.append(curr_alignment)
-            # if we've had at least x iterations, check for improvement
-            if len(alignments) >= prune_after:
-                if all([curr_alignment <= c for c in alignments[-prune_after:]]):
-                    counter += 1
-                else:
-                    counter = 0
+            
             # if we haven't improved for x iterations, stop
-            print(curr_alignment)
+            print(f"{curr_alignment:.4f}")
             if counter >= prune_after:
-                print(f"Stopping optimization, the cost hasn't improved for {i+1} iterations.")
+                print(f"Stopping optimization, the cost hasn't improved for {counter*500} iterations.")
                 break
+
+        #check accuracy
+        if i % 2000 == 0:
+            print(i)
+            init_kernel = lambda x1, x2: kernel(x1, x2, params)
+            classifiers = []
+
+            for (X, Y), _ in train_data:
+                classifiers.append(SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(X, Y))
+
+            printInfo("After kernel alignment", test_data, classifiers, init_kernel)
 
     end = time.time()
     alignment_time = end-start
+    print(f"Kernel alignment time: {alignment_time:.3f}")
 
     init_kernel = lambda x1, x2: kernel(x1, x2, params)
-    printInfo(datasets, init_kernel)
-    
+    classifiers = []
 
-trainSVM(datasets)
+    for (X, Y), _ in train_data:
+        classifiers.append(SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(X, Y))
+
+    printInfo("After kernel alignment", test_data, classifiers, init_kernel)
+    
+trainSVM(train_data, test_data)

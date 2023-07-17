@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=Test_job
+#SBATCH --job-name=Training_Kernel
 #SBATCH --account=Project_2004128
-#SBATCH --time=72:00:00
+#SBATCH --time=20:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2000
 #SBATCH --partition=large
 ##SBATCH --gres=gpu:v100:1
-#SBATCH --ntasks=80
+#SBATCH --ntasks=97
 #SBATCH --output=%A_%a.txt
-#SBATCH --array=1-1
+#SBATCH --array=1-14
 
 export SING_IMAGE="env.sif"
 #export SING_FLAGS=--nv
@@ -21,13 +21,13 @@ mkdir -p "outputs/$file"
 rm "outputs/$file/"*
 # Call the file twice with different parameters
 # Define num wires
-wires=(3 5 9 12)  # Add more parameters as needed
+wires=(5 10)  # Add more parameters as needed
 #Define layers
-layers=(3 5 9 12)
+layers=(5 10)
 #Define batch size
 batch_size=5
 #Define iterations for optimization
-optim_iter=100
+optim_iter=0
 #Define when to stop optimization if not improving in 50s
 prune_after=2
 #Learning rates for the optimizer

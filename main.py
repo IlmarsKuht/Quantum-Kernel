@@ -20,7 +20,7 @@ prune_after = int(sys.argv[6])
 lr = float(sys.argv[7])
 
 #Change to lightning.gpu if you want to use GPU
-simulator = "lightning.gpu"
+simulator = "lightning.qubit"
 
 #DEFINING THE CIRCUIT
 
@@ -129,46 +129,58 @@ def trainSVM(x_train, x_test, y_train, y_test):
     params = random_params(num_wires=num_wires, num_layers=num_layers)
     init_kernel = lambda x1, x2: kernel(x1, x2, params)
 
+    start = time.time()
+    svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(x_train, y_train)
+    end = time.time()
+    fitting_time = end-start
+    
+    printInfo(f"Finished fitting in {fitting_time:.3f} seconds",
+                x_test, y_test, svm, init_kernel)
+
     # NOW ALIGN THE KERNEL TO TRY TO IMPROVE THE PERFORMANCE
 
     opt = qml.GradientDescentOptimizer(lr)
 
     alignments = []
+
+    #ALIGNING
     
     start = time.time()
-
+    counter = 0
+    max_alignment = -1
     for i in range(optim_iter):
         # counter to track when to stop the optimization
-        counter = 0
+        
         subset = np.random.choice(list(range(len(x_train))), batch_size, requires_grad=False)
         cost = lambda _params: -target_alignment(
             x_train[subset],
             y_train[subset],
             lambda x1, x2: kernel(x1, x2, _params)
         )
-        params, curr_cost = opt.step_and_cost(cost, params)
+        params = opt.step(cost, params)
 
-        if (i + 1) % 100 == 0:
+        if (i + 1) % 50 == 0:
             curr_alignment = target_alignment(
                 x_test,
                 y_test,
                 lambda x1, x2: kernel(x1, x2, params)
             )
+            if curr_alignment > max_alignment:
+                max_alignment = curr_alignment
+                counter = 0
+            else:
+                counter += 1 
             alignments.append(curr_alignment)
-            # if we've had at least x iterations, check for improvement
-            if len(alignments) >= prune_after:
-                if all([curr_alignment <= c for c in alignments[-prune_after:]]):
-                    counter += 1
-                else:
-                    counter = 0
             # if we haven't improved for x iterations, stop
             print(curr_alignment)
             if counter >= prune_after:
-                print(f"Stopping optimization, the cost hasn't improved for {i+1} iterations.")
+                print(f"Stopping optimization, the cost hasn't improved for {counter*50} iterations.")
                 break
 
     end = time.time()
     alignment_time = end-start
+
+    #END OF ALIGNING
 
     start = time.time()
     svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(x_train, y_train)
@@ -182,5 +194,5 @@ def trainSVM(x_train, x_test, y_train, y_test):
     
 
 print(f"Training dataset {name}")
-
 trainSVM(x_train, x_test, y_train, y_test)
+
