@@ -46,15 +46,14 @@ dev = qml.device(simulator, wires=num_wires, shots=None)
 wires = dev.wires.tolist()
 
 #I use adjoint so it works for both default.qubit and lightning.gpu (backprop doesn't work for lightning.gpu)
-@qml.qnode(dev, interface="autograd", diff_method="adjoint") 
+@qml.qnode(dev, interface="autograd", diff_method="finite-diff") 
 def kernel_circuit(x1, x2, params):
     ansatz(x1, params, wires=wires)
     qml.adjoint(ansatz)(x2, params, wires=wires)
-    return [qml.expval(qml.PauliZ(w)) for w in wires]
+    return qml.probs(wires=wires)
 
 def kernel(x1, x2, params):
-    expectations = kernel_circuit(x1, x2, params)
-    return np.prod(expectations)
+    return kernel_circuit(x1, x2, params)[0]
 
 
 
@@ -174,7 +173,7 @@ def trainSVM(train_data, test_data):
         
         params = opt.step(cost, params)
 
-        if (i + 1) % 500 == 0:
+        if (i + 1) % 1000 == 0:
             init_kernel = lambda x1, x2: kernel(x1, x2, params)
             curr_alignment = 0
             for (X, Y), _ in test_data:
@@ -191,11 +190,11 @@ def trainSVM(train_data, test_data):
             # if we haven't improved for x iterations, stop
             print(f"{curr_alignment:.4f}")
             if counter >= prune_after:
-                print(f"Stopping optimization, the cost hasn't improved for {counter*500} iterations.")
+                print(f"Stopping optimization, the cost hasn't improved for {counter*1000} iterations.")
                 break
 
         #check accuracy
-        if i % 2000 == 0:
+        if i % 70000 == 0:
             print(i)
             init_kernel = lambda x1, x2: kernel(x1, x2, params)
             classifiers = []
@@ -204,6 +203,7 @@ def trainSVM(train_data, test_data):
                 classifiers.append(SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(X, Y))
 
             printInfo("After kernel alignment", test_data, classifiers, init_kernel)
+            np.save(f"./saved_params/{num_wires}_{num_layers}_{lr}_{i}.npy", params)
 
     end = time.time()
     alignment_time = end-start

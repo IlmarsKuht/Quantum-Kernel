@@ -45,15 +45,14 @@ dev = qml.device(simulator, wires=num_wires, shots=None)
 wires = dev.wires.tolist()
 
 #I use adjoint so it works for both default.qubit and lightning.gpu (backprop doesn't work for lightning.gpu)
-@qml.qnode(dev, interface="autograd", diff_method="adjoint") 
+@qml.qnode(dev, interface="autograd", diff_method="finite-diff") 
 def kernel_circuit(x1, x2, params):
     ansatz(x1, params, wires=wires)
     qml.adjoint(ansatz)(x2, params, wires=wires)
-    return [qml.expval(qml.PauliZ(w)) for w in wires]
+    return qml.probs(wires=wires)
 
 def kernel(x1, x2, params):
-    expectations = kernel_circuit(x1, x2, params)
-    return np.prod(expectations)
+    return kernel_circuit(x1, x2, params)[0]
 
 
 
