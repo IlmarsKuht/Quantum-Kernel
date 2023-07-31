@@ -63,17 +63,17 @@ class KernelBase:
             
             qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wires, parameters=params[1])
 
-    def ansatz(self, x, wires):
+    def ansatz(self, x, params, wires):
         """The embedding ansatz"""
-        for j, layer_params in enumerate(self.params):
+        for j, layer_params in enumerate(params):
             self.layer(x, layer_params, wires, i0=j * len(wires))
 
-    def kernel_circuit(self, x1, x2):
+    def kernel_circuit(self, x1, x2, params):
         # Define the circuit that will be turned into a QNode
         wire_list = range(self.num_wires)
         def circuit(x1, x2):
-            self.ansatz(x1, wires=wire_list)
-            qml.adjoint(self.ansatz)(x2, wires=wire_list)
+            self.ansatz(x1, params, wires=wire_list)
+            qml.adjoint(self.ansatz)(x2, params, wires=wire_list)
             return qml.probs(wires=wire_list)
         
         # Create the QNode
@@ -82,14 +82,14 @@ class KernelBase:
         # Run and return the result of the QNode
         return qnode(x1, x2)
 
-    def kernel(self, x1, x2):
-        return self.kernel_circuit(x1, x2)[0]
+    def kernel(self, x1, x2, params):
+        return self.kernel_circuit(x1, x2, params)[0]
     
     # END OF CIRCUIT STUFF
 
     def train(self, x_train, x_test, y_train, y_test):
 
-        init_kernel = lambda x1, x2: self.kernel(x1, x2)
+        init_kernel = lambda x1, x2: self.kernel(x1, x2, self.params)
 
         start = time.time()
         svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(x_train, y_train)
@@ -129,7 +129,7 @@ class KernelBase:
                 else:
                     counter += 1 
                 alignments.append(curr_alignment)
-                # if we haven't improved for x iterations, stop
+                
                 print(curr_alignment)
                 if counter >= self.prune_after:
                     print(f"Stopping optimization, the cost hasn't improved for {counter*self.acc_test_every} iterations.")
@@ -138,7 +138,7 @@ class KernelBase:
         end = time.time()
         alignment_time = end-start
 
-        init_kernel = lambda x1, x2: self.kernel(x1, x2)
+        init_kernel = lambda x1, x2: self.kernel(x1, x2, self.params)
 
         start = time.time()
         svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(x_train, y_train)

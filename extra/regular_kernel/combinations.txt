@@ -1,0 +1,8 @@
+--num_wires 3 --num_layers 3 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 0 --align_kernel 0
+--num_wires 3 --num_layers 3 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 0 --align_kernel 1
+--num_wires 3 --num_layers 3 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 1 --align_kernel 0
+--num_wires 3 --num_layers 3 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 1 --align_kernel 1
+--num_wires 3 --num_layers 4 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 0 --align_kernel 0
+--num_wires 3 --num_layers 4 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 0 --align_kernel 1
+--num_wires 3 --num_layers 4 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 1 --align_kernel 0
+--num_wires 3 --num_layers 4 --lr 0.1 --batch_size 5 --optim_iter 11 --prune_after 3 --acc_test_every 5 --gamma 1 --projected_kernel 1 --align_kernel 1

@@ -9,11 +9,11 @@ class ProjectedKernel(KernelBase):
 
         self.gamma = gamma
 
-    def kernel_circuit(self, x):
+    def kernel_circuit(self, x, params):
         # Define the circuit that will be turned into a QNode
         wire_list = range(self.num_wires)
         def circuit(x):
-            self.ansatz(x, wires=wire_list)
+            self.ansatz(x, params, wires=wire_list)
             return [qml.expval(P(wire)) for wire in wire_list for P in [qml.PauliX, qml.PauliY, qml.PauliZ]]
         # Create the QNode
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
@@ -21,9 +21,9 @@ class ProjectedKernel(KernelBase):
         # Run and return the result of the QNode
         return qnode(x)
 
-    def kernel(self, x1, x2):
-        expectations_x1 = np.array(self.kernel_circuit(x1))
-        expectations_x2 = np.array(self.kernel_circuit(x2))
+    def kernel(self, x1, x2, params):
+        expectations_x1 = np.array(self.kernel_circuit(x1, params))
+        expectations_x2 = np.array(self.kernel_circuit(x2, params))
             
         # Compute the squared differences and sum them up
         diff = expectations_x1 - expectations_x2
