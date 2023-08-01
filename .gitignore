@@ -1,4 +1,2 @@
 __pycache__/
 .vscode/
-datasets/train/*
-datasets/other/*
