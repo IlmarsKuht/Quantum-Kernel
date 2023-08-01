@@ -5,7 +5,18 @@ from aux.data import load_dataset
 from kernels.kernel import KernelBase
 from kernels.projectedKernel import ProjectedKernel
 
-def str2bool(v):
+def str2bool(v : str) -> bool:
+    """Convert a string to a boolean
+
+    Args:
+        v (str): input string
+
+    Raises:
+        argparse.ArgumentTypeError: string not a boolean
+
+    Returns:
+        bool: 
+    """
     if isinstance(v, bool):
         return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
