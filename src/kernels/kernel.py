@@ -2,11 +2,25 @@ import time
 import pennylane as qml
 from sklearn.svm import SVC
 import pennylane.numpy as np
+from typing import Callable
 
 
 class KernelBase:
-    def __init__(self, num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr):
-        
+    """Basic kernel implementation
+    """
+    def __init__(self, num_wires: int, num_layers: int, batch_size: int,
+                 optim_iter: int, acc_test_every: int, prune_after: int, lr: float):
+        """Initialize kernel
+
+        Args:
+            num_wires (int): number of wires/qubits in the circuit
+            num_layers (int): ansatz layers
+            batch_size (int): samples to use in one training iteration
+            optim_iter (int): max number of training iterations
+            acc_test_every (int): test on testing data every x iterations   
+            prune_after (int): stop training after prune_after * acc_test_every iterations
+            lr (float): Learning rate for the optimizer
+        """
         self.num_wires = num_wires
         self.num_layers = num_layers
         self.batch_size = batch_size
@@ -17,78 +31,161 @@ class KernelBase:
         self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
         self.params = self.random_params()
 
-    def random_params(self):
+    def random_params(self) -> np.ndarray:
+        """
+        Returns:
+            np.ndarray: shape: (self.num_layers, 2, self.num_wires) of random parameters
+        """
         return np.random.uniform(0, 2 * np.pi, (self.num_layers, 2, self.num_wires), requires_grad=True)
 
-    def accuracy(self, classifier, X, Y_target):
-        return 1 - np.count_nonzero(classifier.predict(X) - Y_target) / len(Y_target)
+    def accuracy(self, classifier: SVC, X: np.ndarray, Y: np.ndarray) -> float:
+        """
+        Args:
+            classifier (SVC): sklearn SVC (but anything with .predict() method works)
+            X (np.ndarray): input features
+            Y (np.ndarray): target labels
 
-    def printInfo(self, description, X, Y, classifier, kernel):
-        print(description)
+        Returns:
+            float: accuracy of the model vs target labels between 0 and 1
+        """
+        return 1 - np.count_nonzero(classifier.predict(X) - Y) / len(Y)
+
+    def printInfo(self, X: np.ndarray, Y: np.ndarray,
+                  classifier: SVC, kernel: Callable[[np.ndarray, np.ndarray], float]):
+        """Print given description, kernel alignment and accuracy
+
+        Args:
+            X (np.ndarray): input features
+            Y (np.ndarray): target labels
+            classifier (SVC): sklearn SVC (but anything with .predict() method works)
+            kernel (Callable[[np.ndarray, np.ndarray], float]): kernel function with parameters already provided
+        """
         alignment = self.target_alignment(X, Y, kernel)
         print(f"kernel alignment: {alignment:.3f}")
         accuracy_init = self.accuracy(classifier, X, Y)
         print(f"The accuracy of the kernel is {accuracy_init:.3f}")
 
-    def cosine_similarity(self, A, B):
+    #this is a very primitive similarity measure, try other ones
+    def cosine_similarity(self, A: np.ndarray, B: np.ndarray) -> float:
+        """returns similarity between two kernels
+
+        Args:
+            A (np.ndarray): kernel matrix A
+            B (np.ndarray): kernel matrix B
+
+        Returns:
+            float: The higher the value the more similar (in range -1 to 1)
+            IMPORTANT!!! for non negative vectors the range is 0 to 1
+        """
+
+        #flatten for cosine similarity
         A = A.flatten()
         B = B.flatten()
         return np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
 
-    def target_alignment(self, X, Y, kernel):
+    def target_alignment(self, X: np.ndarray, Y: np.ndarray,
+                         kernel: Callable[[np.ndarray, np.ndarray], float]) -> float:
+        """Improvement function for calculating how far off the target the kernel function is
+
+        Args:
+            X (np.ndarray): input features
+            Y (np.ndarray): target labels
+            kernel (Callable[[np.ndarray, np.ndarray], float]): kernel value calculator for two inputs
+
+        Returns:
+            float: depending on the measure, returns similarity between current kernel and target
+        """
         K = qml.kernels.square_kernel_matrix(
             X,
             kernel,
             assume_normalized_kernel=True,
         )
-        #Target kernel 1s where class is the same and 0 otherwise
+        #Target kernel, if the class is the same then value is 1, otherwise 0
         T = (Y[:, None] == Y[None, :]).astype(float)
-        #turn them into vectors for cosine similarity
-        K = K.reshape(1, -1)
-        T = T.reshape(1, -1)
-
-        #Returns similarity - 1 being identical -1 being opposite
+        #T = (Y[:, None] == Y[None, :]).astype(float) * 2 - 1
+        #If you need values 1 otherwise -1 use this instead ^^
+    
         return self.cosine_similarity(K, T)
     
 
     #CIRCUIT STUFF
-    def layer(self, x, params, wires, i0=0, inc=1):
-        """Building block of the embedding ansatz"""
+    def layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
+        """Ansatz building block
+
+        Args:
+            x (np.ndarray): input features
+            params (np.ndarray): parameters/weights of the circuit
+            i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
+            inc (int, optional): embbed features every x qubit. Defaults to 1.
+        """
         i = i0
-        for j, wire in enumerate(wires):
+        wire_list = range(self.num_wires)
+        for j, wire in enumerate(wire_list):
+            #superpositions
             qml.Hadamard(wires=[wire])
+            #data embedding
             qml.RZ(x[i % len(x)], wires=[wire])
             i += inc
+            #parameterized rotations
             qml.RY(params[0, j], wires=[wire])
-            
-            qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wires, parameters=params[1])
+            #entanglement
+            qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
 
-    def ansatz(self, x, params, wires):
-        """The embedding ansatz"""
+    def ansatz(self, x: np.ndarray, params: np.ndarray):
+        """Applies layers according to parameter amount
+
+        Args:
+            x (np.ndarray): input features
+            params (np.ndarray): paramteres/weights for the circuit
+        """
         for j, layer_params in enumerate(params):
-            self.layer(x, layer_params, wires, i0=j * len(wires))
+            self.layer(x, layer_params, i0=j * len(range(self.num_wires)))
 
-    def kernel_circuit(self, x1, x2, params):
+    def kernel_circuit(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray):
+        """Runs the circuit with given features and parameters
+
+        Args:
+            x1 (np.ndarray): input feature 1
+            x2 (np.ndarray): input feature 2
+            params (np.ndarray): parameters/weights for the circuit
+
+        Returns:
+            array: probabilites of each state
+        """
+
         # Define the circuit that will be turned into a QNode
-        wire_list = range(self.num_wires)
         def circuit(x1, x2):
-            self.ansatz(x1, params, wires=wire_list)
-            qml.adjoint(self.ansatz)(x2, params, wires=wire_list)
-            return qml.probs(wires=wire_list)
+            self.ansatz(x1, params)
+            qml.adjoint(self.ansatz)(x2, params)
+            return qml.probs(wires=range(self.num_wires))
         
-        # Create the QNode
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
-        
-        # Run and return the result of the QNode
         return qnode(x1, x2)
 
-    def kernel(self, x1, x2, params):
+    def kernel(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray) -> float:
+        """kernel function for two features
+
+        Args:
+            x1 (np.ndarray): input feature 1
+            x2 (np.ndarray): input feature 2
+            params (np.ndarray): parameters/weights for the circuit
+
+        Returns:
+            float: probability of all 0s state
+        """
         return self.kernel_circuit(x1, x2, params)[0]
     
     # END OF CIRCUIT STUFF
 
-    def train(self, x_train, x_test, y_train, y_test):
+    def train(self, x_train: np.ndarray, x_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray):
+        """fit an SVM with the kernel
 
+        Args:
+            x_train (np.ndarray): training features
+            x_test (np.ndarray): testing features
+            y_train (np.ndarray): training labels
+            y_test (np.ndarray): testing labels
+        """
         init_kernel = lambda x1, x2: self.kernel(x1, x2, self.params)
 
         start = time.time()
@@ -96,11 +193,18 @@ class KernelBase:
         end = time.time()
         fitting_time = end-start
         
-        self.printInfo(f"Finished fitting in {fitting_time:.3f} seconds",
-                    x_test, y_test, svm, init_kernel)
+        print(f"Finished fitting in {fitting_time:.3f} seconds")
+        self.printInfo(x_test, y_test, svm, init_kernel)
         
-    def train_and_align(self, x_train, x_test, y_train, y_test):
+    def train_and_align(self, x_train: np.ndarray, x_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray):
+        """fit an SVM with the kernel and optimize the parameters of the kernel
 
+        Args:
+            x_train (np.ndarray): training features
+            x_test (np.ndarray): testing features
+            y_train (np.ndarray): training labels
+            y_test (np.ndarray): testing labels
+        """
         opt = qml.GradientDescentOptimizer(self.lr)
         alignments = []
         start = time.time()
@@ -145,9 +249,9 @@ class KernelBase:
         end = time.time()
         fitting_time = end-start
         
-        self.printInfo(f"Finished kernel alignment in {alignment_time:.3f} seconds \n \
-                   Finished fitting in {fitting_time:.3f} seconds",
-                    x_test, y_test, svm, init_kernel)
+        print(f"Finished kernel alignment in {alignment_time:.3f} seconds\
+                \nFinished fitting in {fitting_time:.3f} seconds")
+        self.printInfo(x_test, y_test, svm, init_kernel)
     
 
 
