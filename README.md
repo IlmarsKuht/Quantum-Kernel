@@ -18,6 +18,6 @@ go to the src folder: python main.py --dataset-dir {path to file}
 ### GPU and CPU:
 
 - For GPU use lightning.gpu simulator
-If using SLURM environement uncomment in the bash file #SBATCH --gres=gpu:x:y and  #export SING_FLAGS=--nv
+If using SLURM environement uncomment in the bash file #SBATCH --gres=gpu and  #export SING_FLAGS=--nv
 
 - For CPU use default.qubit/lightning.qubit and comment out the previously mentioned lines
