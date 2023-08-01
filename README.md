@@ -1,22 +1,23 @@
-# Benchmarking Quantum Kernel SVM vs classical SVM
-You can use the code just like this, but it is meant for a SLURM environemnt.
+## Quantum kernel implementation
 
-# In the batch file:
-- Add all parameters you want to test
-- Change array to the size of all the datasets you have (if you have 3 datasets then 1-3)
-- I have commented out the GPU version, if you want to use GPUS, then just uncomment it (you also need to change the code, check below)
+### For SLURM batch jobs
+the folder 'extra' contains bash scripts to interact with the SLURM environemnt
 
-## How to use without batch file:
-- python main.py {dir to dataset} {wire_count} {layer_count} {batch_size} {optim_iter} {prune_after} {LR}
+- All parameters for SLURM jobs can be changed in parameters.py
+- Run the scripts with the command 'bash batch.bash', which is a wrapper for the other bash file.
+- Run the bash script while in the same directory so the parameters.py generates the combinations.txt file in the correct directory
 
-## How to use with batch file:
-- sbatch batch.bash
+### How to use without a SLURM environment:
+go to the src folder: python main.py --dataset-dir {path to file}
 
-## Features:
-- Creates a randomly initialized quantum kernel
-- Aligns the kernel
-- Tests the accuracy and compares vs sklearn all kernels
+- If you want to change the parameters in the main.py file, pass them in as arguments e.g python main.py --dataset-dir ./train --lr 0.1 --optim_iter 1000
+- You can switch to a different kernel by passing the --projected_kernel arg
+- You can turn on kernel alignment by passing --align_kernel
+- Some parameters are only required when doing kernel alignment or using projected kernel, everything can be seen in the main.py file
 
+### GPU and CPU:
 
-For GPU change the simulator in main.py to lightning.gpu
-for CPU change the simulator in main.py to default.qubit/lightning.qubit
+- For GPU use lightning.gpu simulator
+If using SLURM environement uncomment in the bash file #SBATCH --gres=gpu:x:y and  #export SING_FLAGS=--nv
+
+- For CPU use default.qubit/lightning.qubit and comment out the previously mentioned lines
