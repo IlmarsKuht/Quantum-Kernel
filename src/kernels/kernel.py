@@ -4,6 +4,8 @@ from sklearn.svm import SVC
 import pennylane.numpy as np
 from typing import Callable
 
+from sklearn.metrics.pairwise import rbf_kernel, polynomial_kernel, sigmoid_kernel
+
 
 class KernelBase:
     """Basic kernel implementation
@@ -49,6 +51,22 @@ class KernelBase:
             float: accuracy of the model vs target labels between 0 and 1
         """
         return 1 - np.count_nonzero(classifier.predict(X) - Y) / len(Y)
+    
+    def geometric_diff(self, k1: np.ndarray, k2: np.ndarray) -> float:
+        """Calculate geometric difference between two kernels
+
+        Args:
+            k1 (np.ndarray): kernel 1
+            k2 (np.ndarray): kernel 2
+
+        Returns:
+            float: geometric difference
+        """
+        sqrt_k1 = np.sqrt(k1)
+        inv_k2 = np.linalg.inv(k2)
+        diff = sqrt_k1 @ inv_k2 @ sqrt_k1  # Matrix multiplication
+        return np.linalg.norm(diff, 'fro')  # Frobenius norm
+
 
     def printInfo(self, X: np.ndarray, Y: np.ndarray,
                   classifier: SVC, kernel: Callable[[np.ndarray, np.ndarray], float]):
@@ -64,6 +82,20 @@ class KernelBase:
         print(f"kernel alignment: {alignment:.3f}")
         accuracy_init = self.accuracy(classifier, X, Y)
         print(f"The accuracy of the kernel is {accuracy_init:.3f}")
+
+        # Would be nice to let user change the params of the kernels
+        k1 = {"value": rbf_kernel(X), "name": "rbf"}
+        k2 = {"value": polynomial_kernel(X), "name": "poly"}
+        k3 = {"value": sigmoid_kernel(X), "name": "sigmoid"}
+
+        kernel = qml.kernels.square_kernel_matrix(
+            X,
+            kernel,
+            assume_normalized_kernel=True,
+        )
+
+        for k in [k1, k2, k3]:
+            print(f"kernel {k['name']} geometric difference vs Quantum kernel is {self.geometric_diff(k['value'], kernel)}")
 
     #this is a very primitive similarity measure, try other ones
     def cosine_similarity(self, A: np.ndarray, B: np.ndarray) -> float:
