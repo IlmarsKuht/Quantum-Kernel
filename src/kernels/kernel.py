@@ -139,7 +139,6 @@ class KernelBase:
     
         return self.cosine_similarity(K, T)
     
-
     #CIRCUIT STUFF
     def layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
         """Ansatz building block
@@ -150,19 +149,22 @@ class KernelBase:
             i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
             inc (int, optional): embbed features every x qubit. Defaults to 1.
         """
-        i = i0
+
         wire_list = range(self.num_wires)
         for j, wire in enumerate(wire_list):
             #superpositions
             qml.Hadamard(wires=[wire])
+            #parameterized rotations
+            qml.RY(params[0, j], wires=[wire])
+        #entanglement
+        qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
+
+        i = i0
+        for j, wire in enumerate(wire_list):
             #data embedding
             qml.RZ(x[i % len(x)], wires=[wire])
             i += inc
-            #parameterized rotations
-            qml.RY(params[0, j], wires=[wire])
-            #entanglement
-            qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
-
+            
     def ansatz(self, x: np.ndarray, params: np.ndarray):
         """Applies layers according to parameter amount
 

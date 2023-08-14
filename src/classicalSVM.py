@@ -1,15 +1,18 @@
+import os
+import argparse
+
 from sklearn.svm import SVC
 
 from aux.data import load_dataset
 
-import os
-import sys
-
-import time
 
 
-#directory of the dataset is supposed to be passed as an argument
-dataset_dir = sys.argv[1]
+parser = argparse.ArgumentParser(description="classical SVM")
+
+parser.add_argument('--dataset_dir', type=str, required=True, help='Directory of the dataset')
+args = parser.parse_args()
+dataset_dir = args.dataset_dir
+
 name = os.path.splitext(os.path.basename(dataset_dir))[0]
 print(f"Classical SVM on dataset {name}")
 
@@ -24,11 +27,9 @@ for kernel in kernels:
     svm = SVC(kernel=kernel)
 
     # Train the SVM model
-    start = time.time()
     svm.fit(x_train, y_train)
-    end = time.time()
     # Evaluate the model on the test set
     accuracy = svm.score(x_test, y_test)
 
     # Print the accuracy for the current kernel
-    print(f"Kernel: {kernel}, Accuracy: {accuracy:.3f}, Time: {end-start:.3f}")
+    print(f"Kernel: {kernel}, Accuracy: {accuracy:.3f}")
