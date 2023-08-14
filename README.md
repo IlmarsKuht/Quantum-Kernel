@@ -1,6 +1,7 @@
 ## Quantum kernel implementation
 
 ### For SLURM batch jobs
+Disclaimer! You need to update the path to your container file.
 the folder 'extra' contains bash scripts to interact with the SLURM environemnt
 
 - All parameters for SLURM jobs can be changed in parameters.py
