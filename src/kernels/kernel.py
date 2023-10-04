@@ -11,7 +11,8 @@ class KernelBase:
     """Basic kernel implementation
     """
     def __init__(self, num_wires: int, num_layers: int, batch_size: int,
-                 optim_iter: int, acc_test_every: int, prune_after: int, lr: float):
+                 optim_iter: int, acc_test_every: int, prune_after: int, lr: float,
+                 new_architecture: bool):
         """Initialize kernel
 
         Args:
@@ -30,6 +31,7 @@ class KernelBase:
         self.acc_test_every = acc_test_every
         self.prune_after = prune_after
         self.lr = lr
+        self.new_architecture = new_architecture
         self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
         self.params = self.random_params()
 
@@ -139,8 +141,9 @@ class KernelBase:
     
         return self.cosine_similarity(K, T)
     
+
     #CIRCUIT STUFF
-    def layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
+    def old_layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
         """Ansatz building block
 
         Args:
@@ -149,13 +152,36 @@ class KernelBase:
             i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
             inc (int, optional): embbed features every x qubit. Defaults to 1.
         """
+        i = i0
+        wire_list = range(self.num_wires)
+        for j, wire in enumerate(wire_list):
+            #superpositions
+            qml.Hadamard(wires=[wire])
+            #data embedding
+            qml.RZ(x[i % len(x)], wires=[wire])
+            i += inc
+            #parameterized rotations
+            qml.RY(params[0, j], wires=[wire])
 
+        #entanglement
+        qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
+
+    def new_layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
+        """Ansatz building block
+
+        Args:
+            x (np.ndarray): input features
+            params (np.ndarray): parameters/weights of the circuit
+            i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
+            inc (int, optional): embbed features every x qubit. Defaults to 1.
+        """
         wire_list = range(self.num_wires)
         for j, wire in enumerate(wire_list):
             #superpositions
             qml.Hadamard(wires=[wire])
             #parameterized rotations
             qml.RY(params[0, j], wires=[wire])
+
         #entanglement
         qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
 
@@ -164,7 +190,7 @@ class KernelBase:
             #data embedding
             qml.RZ(x[i % len(x)], wires=[wire])
             i += inc
-            
+
     def ansatz(self, x: np.ndarray, params: np.ndarray):
         """Applies layers according to parameter amount
 
@@ -173,7 +199,10 @@ class KernelBase:
             params (np.ndarray): paramteres/weights for the circuit
         """
         for j, layer_params in enumerate(params):
-            self.layer(x, layer_params, i0=j * len(range(self.num_wires)))
+            if self.new_architecture:
+                self.new_layer(x, layer_params, i0=j * len(range(self.num_wires)))
+            else:
+                self.old_layer(x, layer_params, i0=j * len(range(self.num_wires)))
 
     def kernel_circuit(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray):
         """Runs the circuit with given features and parameters

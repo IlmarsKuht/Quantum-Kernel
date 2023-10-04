@@ -6,14 +6,14 @@ from .kernel import KernelBase
 class ProjectedKernel(KernelBase):
     """Kernel value calculated in classical space not Hilbert
     """
-    def __init__(self, num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, gamma: float=1.0):
+    def __init__(self, num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, gamma: float=1.0):
         """Initialize Projected kernel
 
         Args:
             All the same as base kernel except:
             gamma (float, optional): Non-negative hyperparameter, affects the resulting kernel value. Defaults to 1.
         """
-        super().__init__(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr)
+        super().__init__(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture)
         
         if gamma < 0:
             raise ValueError("gamma must be non-negative")

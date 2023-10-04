@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=Proj_Kernel_Test
+#SBATCH --job-name=Kernel
 #SBATCH --account=Project_2004128
-#SBATCH --time=01:00:00
+#SBATCH --time=72:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=1000
 #SBATCH --partition=small
@@ -9,7 +9,7 @@
 #SBATCH --ntasks=1
 #SBATCH --output=%A_%a.txt
 
-#RUN batch.bash, not this script directly
+#RUN batch.bash, not this script directly !!!!!!!!!!!!!
 
 export SING_IMAGE="../../../env.sif"
 #export SING_FLAGS=--nv

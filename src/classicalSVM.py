@@ -3,9 +3,7 @@ import argparse
 
 from sklearn.svm import SVC
 
-from aux.data import load_dataset
-
-
+from auxilary.data import load_dataset
 
 parser = argparse.ArgumentParser(description="classical SVM")
 
