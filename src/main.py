@@ -39,9 +39,10 @@ def main():
     parser.add_argument('--prune_after', type=int, default=2, help='Prune after prune_after*acc_test_every iterations with no improvement')
     parser.add_argument('--lr', type=float, default=0.05, help='Learning rate')
     parser.add_argument('--gamma', type=float, default=1, help='Gamma value for projected kernel')
-    parser.add_argument('--align_kernel', type=str2bool, nargs='?', const=True, default=False, help="Whether to try to align the kernel")
+    parser.add_argument('--align_kernel', type=str2bool, nargs='?', const=True, default=False, help="Whether to to align the kernel")
     parser.add_argument('--projected_kernel', type=str2bool, nargs='?', const=True, default=False, help="Whether to use projected kernel")
     parser.add_argument('--new_architecture', type=str2bool, nargs='?', const=True, default=False, help="Whether to use new or old architecture stacks")
+    
     args = parser.parse_args()
 
     dataset_dir = args.dataset_dir
@@ -70,9 +71,9 @@ def main():
     print(f"Wires: {num_wires} | Layers: {num_layers} | Proj_kern: {projected_kernel} | align_kern: {align_kernel} | seed: {seed} | new_architecture: {new_architecture}")
 
     if projected_kernel:
-        kernel = ProjectedKernel(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, gamma)
+        kernel = ProjectedKernel(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, gamma)
     else:
-        kernel = KernelBase(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture)
+        kernel = KernelBase(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel)
 
     if align_kernel:
         kernel.train_and_align(x_train, x_test, y_train, y_test)

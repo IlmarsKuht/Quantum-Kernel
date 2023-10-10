@@ -12,7 +12,7 @@ class KernelBase:
     """
     def __init__(self, num_wires: int, num_layers: int, batch_size: int,
                  optim_iter: int, acc_test_every: int, prune_after: int, lr: float,
-                 new_architecture: bool):
+                 new_architecture: bool, align_kernel: bool):
         """Initialize kernel
 
         Args:
@@ -32,6 +32,7 @@ class KernelBase:
         self.prune_after = prune_after
         self.lr = lr
         self.new_architecture = new_architecture
+        self.align_kernel = align_kernel
         self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
         self.params = self.random_params()
 
@@ -219,7 +220,8 @@ class KernelBase:
         # Define the circuit that will be turned into a QNode
         def circuit(x1, x2):
             self.ansatz(x1, params)
-            qml.adjoint(self.ansatz)(x2, params)
+            if self.align_kernel:
+                qml.adjoint(self.ansatz)(x2, params)
             return qml.probs(wires=range(self.num_wires))
         
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
