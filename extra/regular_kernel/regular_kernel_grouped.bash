@@ -19,7 +19,7 @@ out_dir=$2
 data_dir=$3
 
 # Calculate the current file and combination indices
-file_index=$(( ($SLURM_ARRAY_TASK_ID-1) / num_combinations + 1 ))
+file_index=$SLURM_ARRAY_TASK_ID
 
 # Get the current file name
 file=$(ls $data_dir | sed -n "${file_index}p")

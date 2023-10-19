@@ -12,7 +12,7 @@ gammas = [1]
 seeds = [100,101,102,103,104]
 # 1 is true, 0 is false or just write true or false, I don't control your life
 projected_kernel = [0]
-align_kernel = [1]
+align_kernel = [0]
 new_architectures = [0,1]
 
 # Generate all combinations

@@ -220,8 +220,7 @@ class KernelBase:
         # Define the circuit that will be turned into a QNode
         def circuit(x1, x2):
             self.ansatz(x1, params)
-            if self.align_kernel:
-                qml.adjoint(self.ansatz)(x2, params)
+            qml.adjoint(self.ansatz)(x2, params)
             return qml.probs(wires=range(self.num_wires))
         
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
