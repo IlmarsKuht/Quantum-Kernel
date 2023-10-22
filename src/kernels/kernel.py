@@ -12,7 +12,8 @@ class KernelBase:
     """
     def __init__(self, num_wires: int, num_layers: int, batch_size: int,
                  optim_iter: int, acc_test_every: int, prune_after: int, lr: float,
-                 new_architecture: bool, align_kernel: bool):
+                 new_architecture: bool, align_kernel: bool, default_features: bool,
+                 min: float, range: float):
         """Initialize kernel
 
         Args:
@@ -33,6 +34,9 @@ class KernelBase:
         self.lr = lr
         self.new_architecture = new_architecture
         self.align_kernel = align_kernel
+        self.default_features = default_features
+        self.min = min
+        self.range = range
         self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
         self.params = self.random_params()
 
@@ -42,6 +46,11 @@ class KernelBase:
             np.ndarray: shape: (self.num_layers, 2, self.num_wires) of random parameters
         """
         return np.random.uniform(0, 2 * np.pi, (self.num_layers, 2, self.num_wires), requires_grad=True)
+    
+    def normalize_features(self, x: np.ndarray) -> np.ndarray:
+        """Normalize the data using the provided normalization factors."""
+        normalized = np.pi * (x - self.min) / self.range
+        return normalized
 
     def accuracy(self, classifier: SVC, X: np.ndarray, Y: np.ndarray) -> float:
         """
@@ -153,6 +162,8 @@ class KernelBase:
             i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
             inc (int, optional): embbed features every x qubit. Defaults to 1.
         """
+        
+        
         i = i0
         wire_list = range(self.num_wires)
         for j, wire in enumerate(wire_list):
@@ -166,6 +177,11 @@ class KernelBase:
 
         #entanglement
         qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
+
+        if self.default_features:
+            normalized_x = self.normalize_features(x)
+            for j, val in enumerate(normalized_x):
+                qml.RZ(val, wires=[self.num_wires + j])
 
     def new_layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
         """Ansatz building block
@@ -191,6 +207,23 @@ class KernelBase:
             #data embedding
             qml.RZ(x[i % len(x)], wires=[wire])
             i += inc
+
+        if self.default_features:
+            normalized_x = self.normalize_features(x)
+            for j, val in enumerate(normalized_x):
+                qml.RZ(val, wires=[self.num_wires + j])
+    
+    # def simple_layer(self, x: np.ndarray, params: np.ndarray):
+    #     wire_list = range(self.num_wires)
+    #     for j, wire in enumerate(wire_list):
+    #         qml.Hadamard(wires=[wire])
+    #         qml.RY(params[j], wires=[wire])
+
+    #     if self.default_features:
+    #         normalized_x = self.normalize_features(x)
+    #         for j, val in enumerate(normalized_x):
+    #             qml.RZ(val, wires=[self.num_wires + j])
+
 
     def ansatz(self, x: np.ndarray, params: np.ndarray):
         """Applies layers according to parameter amount
@@ -221,8 +254,13 @@ class KernelBase:
         def circuit(x1, x2):
             self.ansatz(x1, params)
             qml.adjoint(self.ansatz)(x2, params)
-            return qml.probs(wires=range(self.num_wires))
-        
+            if self.default_features:
+                return qml.probs(wires=range(self.num_wires + len(x1)))
+            else:
+                return qml.probs(wires=range(self.num_wires))
+            
+        if self.default_features:
+            self.dev = qml.device("lightning.qubit", wires=self.num_wires + len(x1), shots=None)
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
         return qnode(x1, x2)
 

@@ -25,6 +25,18 @@ def str2bool(v : str) -> bool:
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+    
+def compute_normalization_factors(data: np.ndarray):
+    """Compute the normalization factors for a given dataset."""
+    min_val = np.min(data)
+    range_val = np.max(data) - min_val
+    
+    # Ensure range_val is not zero to avoid division issues
+    if np.isclose(range_val, 0):
+        range_val = 1  # or handle this edge case differently if needed
+    
+    return min_val, range_val
+
 
 def main():   
     parser = argparse.ArgumentParser(description="Kernel training")
@@ -42,6 +54,7 @@ def main():
     parser.add_argument('--align_kernel', type=str2bool, nargs='?', const=True, default=False, help="Whether to to align the kernel")
     parser.add_argument('--projected_kernel', type=str2bool, nargs='?', const=True, default=False, help="Whether to use projected kernel")
     parser.add_argument('--new_architecture', type=str2bool, nargs='?', const=True, default=False, help="Whether to use new or old architecture stacks")
+    parser.add_argument('--default_features', type=str2bool, nargs='?', const=True, default=False, help="Whether to include the default features along with kernel generated features")
     
     args = parser.parse_args()
 
@@ -63,17 +76,19 @@ def main():
     align_kernel = args.align_kernel
     projected_kernel = args.projected_kernel
     new_architecture = args.new_architecture
+    default_features = args.default_features
 
     np.random.seed(seed) 
 
     x_train, x_test, y_train, y_test = load_dataset(dataset_dir)
+    min, range = compute_normalization_factors(x_train)
     print("---------------------------")
     print(f"Wires: {num_wires} | Layers: {num_layers} | Proj_kern: {projected_kernel} | align_kern: {align_kernel} | seed: {seed} | new_architecture: {new_architecture}")
 
     if projected_kernel:
-        kernel = ProjectedKernel(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, gamma)
+        kernel = ProjectedKernel(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, default_features, min, range, gamma)
     else:
-        kernel = KernelBase(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel)
+        kernel = KernelBase(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, min, range, default_features)
 
     if align_kernel:
         kernel.train_and_align(x_train, x_test, y_train, y_test)

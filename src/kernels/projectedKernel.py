@@ -6,14 +6,14 @@ from .kernel import KernelBase
 class ProjectedKernel(KernelBase):
     """Kernel value calculated in classical space not Hilbert
     """
-    def __init__(self, num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, gamma: float=1.0):
+    def __init__(self, num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, default_features, min, range, gamma: float=1.0):
         """Initialize Projected kernel
 
         Args:
             All the same as base kernel except:
             gamma (float, optional): Non-negative hyperparameter, affects the resulting kernel value. Defaults to 1.
         """
-        super().__init__(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel)
+        super().__init__(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, default_features, min, range)
         
         if gamma < 0:
             raise ValueError("gamma must be non-negative")
@@ -36,6 +36,8 @@ class ProjectedKernel(KernelBase):
             self.ansatz(x, params)
             return [qml.expval(P(wire)) for wire in range(self.num_wires) for P in [qml.PauliX, qml.PauliY, qml.PauliZ]]
         
+        if self.default_features:
+            self.dev = qml.device("lightning.qubit", wires=self.num_wires + len(x), shots=None)
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
         
         return qnode(x)
