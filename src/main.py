@@ -83,7 +83,7 @@ def main():
     x_train, x_test, y_train, y_test = load_dataset(dataset_dir)
     min, range = compute_normalization_factors(x_train)
     print("---------------------------")
-    print(f"Wires: {num_wires} | Layers: {num_layers} | Proj_kern: {projected_kernel} | align_kern: {align_kernel} | seed: {seed} | new_architecture: {new_architecture}")
+    print(f"Wires: {num_wires} | Layers: {num_layers} | Proj_kern: {projected_kernel} | align_kern: {align_kernel} | seed: {seed} | new_architecture: {new_architecture} | default_features: {default_features}")
 
     if projected_kernel:
         kernel = ProjectedKernel(num_wires, num_layers, batch_size, optim_iter, acc_test_every, prune_after, lr, new_architecture, align_kernel, default_features, min, range, gamma)
