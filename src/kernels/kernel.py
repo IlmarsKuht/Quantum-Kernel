@@ -12,8 +12,8 @@ class KernelBase:
     """
     def __init__(self, num_wires: int, num_layers: int, batch_size: int,
                  optim_iter: int, acc_test_every: int, prune_after: int, lr: float,
-                 new_architecture: bool, align_kernel: bool, default_features: bool,
-                 min: float, range: float):
+                 new_architecture: bool, align_kernel: bool,
+                 linear_kernel: bool, x: bool):
         """Initialize kernel
 
         Args:
@@ -25,6 +25,7 @@ class KernelBase:
             prune_after (int): stop training after prune_after * acc_test_every iterations
             lr (float): Learning rate for the optimizer
         """
+        
         self.num_wires = num_wires
         self.num_layers = num_layers
         self.batch_size = batch_size
@@ -34,9 +35,8 @@ class KernelBase:
         self.lr = lr
         self.new_architecture = new_architecture
         self.align_kernel = align_kernel
-        self.default_features = default_features
-        self.min = min
-        self.range = range
+        self.linear_kernel = linear_kernel
+        self.x = x
         self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
         self.params = self.random_params()
 
@@ -45,12 +45,10 @@ class KernelBase:
         Returns:
             np.ndarray: shape: (self.num_layers, 2, self.num_wires) of random parameters
         """
-        return np.random.uniform(0, 2 * np.pi, (self.num_layers, 2, self.num_wires), requires_grad=True)
-    
-    def normalize_features(self, x: np.ndarray) -> np.ndarray:
-        """Normalize the data using the provided normalization factors."""
-        normalized = np.pi * (x - self.min) / self.range
-        return normalized
+        if self.x:
+            return np.random.uniform(0, 2 * np.pi, (self.num_layers-1, 2, self.num_wires), requires_grad=True)
+        else:
+            return np.random.uniform(0, 2 * np.pi, (self.num_layers, 2, self.num_wires), requires_grad=True)
 
     def accuracy(self, classifier: SVC, X: np.ndarray, Y: np.ndarray) -> float:
         """
@@ -62,7 +60,8 @@ class KernelBase:
         Returns:
             float: accuracy of the model vs target labels between 0 and 1
         """
-        return 1 - np.count_nonzero(classifier.predict(X) - Y) / len(Y)
+        prediction = classifier.predict(X)
+        return (prediction == Y).sum() / len(Y)
     
     def geometric_diff(self, k1: np.ndarray, k2: np.ndarray) -> float:
         """Calculate geometric difference between two kernels
@@ -76,7 +75,7 @@ class KernelBase:
         """
         sqrt_k1 = np.sqrt(k1)
         inv_k2 = np.linalg.inv(k2)
-        diff = sqrt_k1 @ inv_k2 @ sqrt_k1  # Matrix multiplication
+        diff = sqrt_k1 @ inv_k2 @ sqrt_k1
         return np.linalg.norm(diff, 'fro')  # Frobenius norm
 
 
@@ -96,18 +95,18 @@ class KernelBase:
         print(f"The accuracy of the kernel is {accuracy_init:.3f}")
 
         # Would be nice to let user change the params of the kernels
-        k1 = {"value": rbf_kernel(X), "name": "rbf"}
-        k2 = {"value": polynomial_kernel(X), "name": "poly"}
-        k3 = {"value": sigmoid_kernel(X), "name": "sigmoid"}
+        # k1 = {"value": rbf_kernel(X), "name": "rbf"}
+        # k2 = {"value": polynomial_kernel(X), "name": "poly"}
+        # k3 = {"value": sigmoid_kernel(X), "name": "sigmoid"}
 
-        kernel = qml.kernels.square_kernel_matrix(
-            X,
-            kernel,
-            assume_normalized_kernel=True,
-        )
+        # kernel = qml.kernels.square_kernel_matrix(
+        #     X,
+        #     kernel,
+        #     assume_normalized_kernel=True,
+        # )
 
-        for k in [k1, k2, k3]:
-            print(f"kernel {k['name']} geometric difference vs Quantum kernel is {self.geometric_diff(k['value'], kernel)}")
+        # for k in [k1, k2, k3]:
+        #     print(f"kernel {k['name']} geometric difference vs Quantum kernel is {self.geometric_diff(k['value'], kernel)}")
 
     #this is a very primitive similarity measure, try other ones
     def cosine_similarity(self, A: np.ndarray, B: np.ndarray) -> float:
@@ -153,7 +152,7 @@ class KernelBase:
     
 
     #CIRCUIT STUFF
-    def old_layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
+    def layer_xf(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
         """Ansatz building block
 
         Args:
@@ -162,8 +161,6 @@ class KernelBase:
             i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
             inc (int, optional): embbed features every x qubit. Defaults to 1.
         """
-        
-        
         i = i0
         wire_list = range(self.num_wires)
         for j, wire in enumerate(wire_list):
@@ -178,24 +175,17 @@ class KernelBase:
         #entanglement
         qml.broadcast(unitary=qml.CRZ, pattern="ring", wires=wire_list, parameters=params[1])
 
-        if self.default_features:
-            normalized_x = self.normalize_features(x)
-            for j, val in enumerate(normalized_x):
-                qml.RZ(val, wires=[self.num_wires + j])
-
-    def new_layer(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
+    def layer_fx(self, x: np.ndarray, params: np.ndarray, i0: int=0, inc: int=1):
         """Ansatz building block
 
         Args:
             x (np.ndarray): input features
             params (np.ndarray): parameters/weights of the circuit
-            i0 (int, optional): keeps track of embedded features to know which to embbed next. Defaults to 0.
+            i0 (int, optional): keeps track of embedded features to know which to embed next. Defaults to 0.
             inc (int, optional): embbed features every x qubit. Defaults to 1.
         """
         wire_list = range(self.num_wires)
         for j, wire in enumerate(wire_list):
-            #superpositions
-            qml.Hadamard(wires=[wire])
             #parameterized rotations
             qml.RY(params[0, j], wires=[wire])
 
@@ -204,26 +194,17 @@ class KernelBase:
 
         i = i0
         for j, wire in enumerate(wire_list):
+            #superpositions
+            qml.Hadamard(wires=[wire])
             #data embedding
             qml.RZ(x[i % len(x)], wires=[wire])
             i += inc
+        
 
-        if self.default_features:
-            normalized_x = self.normalize_features(x)
-            for j, val in enumerate(normalized_x):
-                qml.RZ(val, wires=[self.num_wires + j])
-    
-    # def simple_layer(self, x: np.ndarray, params: np.ndarray):
-    #     wire_list = range(self.num_wires)
-    #     for j, wire in enumerate(wire_list):
-    #         qml.Hadamard(wires=[wire])
-    #         qml.RY(params[j], wires=[wire])
-
-    #     if self.default_features:
-    #         normalized_x = self.normalize_features(x)
-    #         for j, val in enumerate(normalized_x):
-    #             qml.RZ(val, wires=[self.num_wires + j])
-
+    #test quantum kernel with a linear kernel
+    def linear_layer(self, x: np.ndarray):
+        for j, val in enumerate(x):
+            qml.RZ(val, wires=[j])
 
     def ansatz(self, x: np.ndarray, params: np.ndarray):
         """Applies layers according to parameter amount
@@ -232,11 +213,23 @@ class KernelBase:
             x (np.ndarray): input features
             params (np.ndarray): paramteres/weights for the circuit
         """
+        if self.x:
+            wire_list = range(self.num_wires)
+            i = 0
+            for j, wire in enumerate(wire_list):
+                qml.Hadamard(wires=[wire])
+                #data embedding
+                qml.RZ(x[i % len(x)], wires=[wire])
+                i += 1
         for j, layer_params in enumerate(params):
             if self.new_architecture:
-                self.new_layer(x, layer_params, i0=j * len(range(self.num_wires)))
+                self.layer_fx(x, layer_params, i0=j * len(range(self.num_wires)))
+            elif self.x:
+                self.layer_fx(x, layer_params, i0=(j+1) * len(range(self.num_wires)))
+            elif self.linear_kernel:
+                self.linear_layer(x)
             else:
-                self.old_layer(x, layer_params, i0=j * len(range(self.num_wires)))
+                self.layer_xf(x, layer_params, i0=j * len(range(self.num_wires)))
 
     def kernel_circuit(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray):
         """Runs the circuit with given features and parameters
@@ -254,14 +247,14 @@ class KernelBase:
         def circuit(x1, x2):
             self.ansatz(x1, params)
             qml.adjoint(self.ansatz)(x2, params)
-            if self.default_features:
-                return qml.probs(wires=range(self.num_wires + len(x1)))
-            else:
-                return qml.probs(wires=range(self.num_wires))
+            return qml.probs(wires=range(self.num_wires))
             
-        if self.default_features:
-            self.dev = qml.device("lightning.qubit", wires=self.num_wires + len(x1), shots=None)
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
+        #Create a drawable version of the QNode
+        drawable_circuit = qml.draw(qnode)
+
+        # Call the drawable circuit with the same arguments and print
+        print(drawable_circuit(x1, x2))
         return qnode(x1, x2)
 
     def kernel(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray) -> float:
@@ -313,7 +306,6 @@ class KernelBase:
         counter = 0
         max_alignment = -1
         for i in range(self.optim_iter):
-            # counter to track when to stop the optimization
             
             subset = np.random.choice(list(range(len(x_train))), self.batch_size, requires_grad=False)
             cost = lambda _params: -self.target_alignment(
@@ -354,8 +346,19 @@ class KernelBase:
         print(f"Finished kernel alignment in {alignment_time:.3f} seconds\
                 \nFinished fitting in {fitting_time:.3f} seconds")
         self.printInfo(x_test, y_test, svm, init_kernel)
-    
 
+    #I don't know what is this, some test I wanted to do?
+    def full_test(self, x_train: np.ndarray, x_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray):
+        #First a test of full qubits the same amount as there are features
+        #One test where normalization is done and where there is no normalization. 
+        # I assume no normalization should be very bad
+        self.num_wires = len(x_train[0]) #check if it is a feature set
+        self.dev = qml.device("lightning.qubit", wires=self.num_wires, shots=None)
+        self.params = self.random_params()
 
+        def circuit(x1, x2):
+            self.testLayer(x1)
+            qml.adjoint(self.testLayer(x2))
+            return qml.probs(wires=range(self.num_wires))
         
-
+        qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
