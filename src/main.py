@@ -70,8 +70,11 @@ def main():
     x = args.x
 
     np.random.seed(seed) 
+    #Seed here sohuld be constant for each dataset
 
-    x_train, x_test, y_train, y_test = load_dataset(dataset_dir, normalize=True)
+    x_train, x_test, y_train, y_test = load_dataset(dataset_dir, normalize=True, seed=15)
+    print(x_test)
+    #Here the seed from 1-25 for everything.
 
     if linear_kernel:
         num_wires = len(x_train[0])

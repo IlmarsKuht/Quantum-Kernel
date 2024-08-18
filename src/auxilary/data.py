@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-def load_dataset(dataset_dir: str, test_size: float=0.2, normalize: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_dataset(dataset_dir: str, test_size: float=0.2, normalize: bool=False, seed: int=15) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """loads the file and splits into train and test data
 
     Args:
@@ -27,5 +27,5 @@ def load_dataset(dataset_dir: str, test_size: float=0.2, normalize: bool=False) 
         scaler = MinMaxScaler()
         X = scaler.fit_transform(X)
 
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=test_size)
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
     return x_train, x_test, y_train, y_test

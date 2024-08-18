@@ -250,11 +250,11 @@ class KernelBase:
             return qml.probs(wires=range(self.num_wires))
             
         qnode = qml.QNode(circuit, self.dev, interface="autograd", diff_method="finite-diff")
-        #Create a drawable version of the QNode
-        drawable_circuit = qml.draw(qnode)
+        # #Create a drawable version of the QNode
+        # drawable_circuit = qml.draw(qnode)
 
-        # Call the drawable circuit with the same arguments and print
-        print(drawable_circuit(x1, x2))
+        # # Call the drawable circuit with the same arguments and print
+        # print(drawable_circuit(x1, x2))
         return qnode(x1, x2)
 
     def kernel(self, x1: np.ndarray, x2: np.ndarray, params: np.ndarray) -> float:
@@ -316,19 +316,24 @@ class KernelBase:
             self.params = opt.step(cost, self.params)
 
             if (i + 1) % self.acc_test_every == 0:
-                curr_alignment = self.target_alignment(
-                    x_test,
-                    y_test,
-                    lambda x1, x2: self.kernel(x1, x2, self.params)
-                )
-                if curr_alignment > max_alignment:
-                    max_alignment = curr_alignment
-                    counter = 0
-                else:
-                    counter += 1 
-                alignments.append(curr_alignment)
+                # curr_alignment = self.target_alignment(
+                #     x_test,
+                #     y_test,
+                #     lambda x1, x2: self.kernel(x1, x2, self.params)
+                # )
+                # if curr_alignment > max_alignment:
+                #     max_alignment = curr_alignment
+                #     counter = 0
+                # else:
+                #     counter += 1 
+                # alignments.append(curr_alignment)
                 
-                print(curr_alignment)
+                # print(curr_alignment)
+
+                init_kernel = lambda x1, x2: self.kernel(x1, x2, self.params)
+                svm = SVC(kernel=lambda X1, X2: qml.kernels.kernel_matrix(X1, X2, init_kernel)).fit(x_train, y_train)
+                self.printInfo(x_test, y_test, svm, init_kernel)
+
                 if counter >= self.prune_after:
                     print(f"Stopping optimization, the cost hasn't improved for {counter*self.acc_test_every} iterations.")
                     break
